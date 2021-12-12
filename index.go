@@ -1,13 +1,79 @@
 package main
 
 import (
+	"database/sql"
+	"encoding/json"
 	"fmt"
+	"log"
+	"net/http"
 
+	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 )
 
+type JsonResponse struct {
+	Type    string     `json:"type"`
+	Data    []Property `json:"data"`
+	Message string     `json:"message"`
+}
+
+// DB set up
+func setupDB() *sql.DB {
+	dbinfo := fmt.Sprintf("user=%s password=%s dbname=%s sslmode=disable", DB_USER, DB_PASSWORD, DB_NAME)
+	db, err := sql.Open("postgres", dbinfo)
+
+	checkErr(err)
+
+	return db
+}
+
+// Function for handling messages
+func printMessage(message string) {
+	fmt.Println("")
+	fmt.Println(message)
+	fmt.Println("")
+}
+
+// Function for handling errors
+func checkErr(err error) {
+	if err != nil {
+		panic(err)
+	}
+}
+
+func GetProperties(w http.ResponseWriter, r *http.Request) {
+	printMessage("Getting properties...")
+
+	db := setupDB()
+
+	// Get all properties from table
+	rows, err := db.Query("SELECT * FROM properties")
+
+	checkErr(err)
+
+	var properties []Property
+
+	for rows.Next() {
+		var id int
+		var address string
+
+		err = rows.Scan(&id, &address)
+
+		checkErr(err)
+
+		properties = append(properties, Property{PropertyID: id, Address: address})
+	}
+
+	var response = JsonResponse{Type: "success", Data: properties}
+
+	json.NewEncoder(w).Encode(response)
+}
+
 func main() {
-	fmt.Println(DB_USER)
-	fmt.Println(DB_NAME)
-	fmt.Println(DB_PASSWORD)
+	router := mux.NewRouter()
+
+	// Get all properties
+	router.HandleFunc("/properties/", GetProperties).Methods("GET")
+
+	log.Fatal(http.ListenAndServe(":8000", router))
 }
