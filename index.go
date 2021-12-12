@@ -69,11 +69,54 @@ func GetProperties(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(response)
 }
 
+// create a property
+func CreateProperty(w http.ResponseWriter, r *http.Request) {
+	address := r.FormValue("address")
+
+	var response = JsonResponse{}
+
+	if address == "" {
+		response = JsonResponse{Type: "error", Message: "You are missing an address"}
+	} else {
+		db := setupDB()
+
+		printMessage("inserting into db")
+
+		var lastInsertID int
+		err := db.QueryRow("INSERT INTO properties(address) VALUES($1) returning id;", address).Scan(&lastInsertID)
+		// check errors
+		checkErr(err)
+		fmt.Println(lastInsertID)
+		var createdProperty []Property
+		rows, err := db.Query("SELECT * FROM properties WHERE id=($1)", lastInsertID)
+
+		checkErr(err)
+
+		for rows.Next() {
+			var id int
+			var address string
+
+			err = rows.Scan(&id, &address)
+
+			checkErr(err)
+
+			createdProperty = append(createdProperty, Property{PropertyID: id, Address: address})
+		}
+		response = JsonResponse{Type: "success", Data: createdProperty, Message: "The property has been inserted successfully!"}
+	}
+
+	json.NewEncoder(w).Encode(response)
+
+}
+
 func main() {
 	router := mux.NewRouter()
 
 	// Get all properties
 	router.HandleFunc("/properties/", GetProperties).Methods("GET")
+
+	// Create a property
+	router.HandleFunc("/property/", CreateProperty).Methods("POST")
 
 	log.Fatal(http.ListenAndServe(":8000", router))
 }
